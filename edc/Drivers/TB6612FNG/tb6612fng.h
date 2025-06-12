@@ -12,6 +12,11 @@
 
 #include "main.h"
 #include "usart.h"
+#include "tim.h"
+#include <stdio.h>
+
+#define WHEELLENGTH 66e-3 //The length of wheel
+#define PPR 360 // The Pulses Per Revolution of encoder
 
 typedef enum{
 	FOR = 0,
@@ -52,5 +57,13 @@ void MotorInit(Motor* M,
     uint16_t current_duty);
 
 void MotorSet(MOVETYPE type, uint16_t duty, Motor* M);
+
+double getLeftSpeed(void);
+double getRightSpeed(void);
+uint32_t ReloadTime(TIM_TypeDef* tim);
+
+void EncoderInit(TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
+	TIM_HandleTypeDef *rightTimer, uint32_t chan1R, uint32_t chan2R,
+	TIM_HandleTypeDef *realTimer);
 
 #endif
