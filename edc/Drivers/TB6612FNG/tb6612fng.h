@@ -14,6 +14,8 @@
 #include "usart.h"
 #include "tim.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define WHEELLENGTH 66e-3 //The length of wheel
 #define PPR 360 // The Pulses Per Revolution of encoder
@@ -43,6 +45,15 @@ typedef struct{
 	PWM speed;
 }Motor;
 
+typedef struct{
+	double *lData;
+	double *rData;
+	int size;
+	int div;
+	int total;
+	UART_HandleTypeDef *huart;
+}Mem;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,5 +76,9 @@ uint32_t ReloadTime(TIM_TypeDef* tim);
 void EncoderInit(TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
 	TIM_HandleTypeDef *rightTimer, uint32_t chan1R, uint32_t chan2R,
 	TIM_HandleTypeDef *realTimer);
+
+void SpeedMemInit(int size, int div, UART_HandleTypeDef *huart);
+void MemOut(void);
+void destoryMem(void);
 
 #endif

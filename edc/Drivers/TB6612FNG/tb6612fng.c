@@ -15,6 +15,7 @@ uint32_t reloadFre;
 TIM_HandleTypeDef *leftT; //Timer you set for left encoder
 TIM_HandleTypeDef *rightT; //Timer you set for right encoder
 TIM_HandleTypeDef *reload_tim; //Timer you set as real-time clock
+Mem *speedMem = NULL;
 
 void EncoderInit(TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
 	TIM_HandleTypeDef *rightTimer, uint32_t chan1R, uint32_t chan2R,
@@ -37,6 +38,21 @@ void EncoderInit(TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
 	return;
 }
 
+void SpeedMemInit(int size, int div, UART_HandleTypeDef *huart)
+{
+	speedMem = (Mem *)malloc(sizeof(Mem));//Pay attention to you minimum heap setting. If it's too small, you'll get NULL
+	speedMem->huart = huart;
+	
+	speedMem->lData = (double *)malloc(sizeof(double) * size);
+	speedMem->rData = (double *)malloc(sizeof(double) * size);
+
+	speedMem->size = size;
+	
+	speedMem->total = 0;
+	speedMem->div = div;
+	return;
+}
+
 void MotorInit(Motor* M,	//In the Init function, the motor was set in sleep modle.
 		GPIO_TypeDef* p_port, //The GPIO group of the positive pin. Example: GPIOA for PA1
 		uint16_t p_pin,				//The number of pin. Example: GPIO_PIN_1 for PA1
@@ -48,7 +64,8 @@ void MotorInit(Motor* M,	//In the Init function, the motor was set in sleep modl
 {
 	if(M == NULL || pwm_timer == NULL)
 	{
-		HAL_UART_Transmit(&huart1, (uint8_t *)"test3", 5, 1000);
+		//HAL_UART_Transmit(&huart1, (uint8_t *)"test3", 5, 1000);
+		//If you need test, please use these sentence and exchange huart1 to your setted huart.
 		return;
 	}
 	M->p.port = p_port;
@@ -72,7 +89,8 @@ void MotorSet(MOVETYPE type, uint16_t duty, Motor* M)
 	//I use integer variable(duty) instead of float variable(speed) to control the speed.
 {
 	if (M == NULL) {
-        HAL_UART_Transmit(&huart1, (uint8_t*)"NULL POINTER DETECTED!\r\n", 25, 1000);
+        //HAL_UART_Transmit(&huart1, (uint8_t*)"NULL POINTER DETECTED!\r\n", 25, 1000); 
+				//If you need test, please use these sentence and exchange huart1 to your setted huart.
         return;
     }
 	switch(type)
@@ -111,8 +129,23 @@ int getTIMx_DetaCnt(TIM_HandleTypeDef *htim)
 
 void Get_Motor_Speed(int *leftSpeed, int *rightSpeed)
 {
-    *leftSpeed = getTIMx_DetaCnt(leftT);
-    *rightSpeed = getTIMx_DetaCnt(rightT);
+	*leftSpeed = getTIMx_DetaCnt(leftT);
+	*rightSpeed = getTIMx_DetaCnt(rightT);
+
+	if(speedMem != NULL)
+	{
+		if(speedMem->total >= speedMem->size * speedMem->div)
+		{
+			return;
+		}
+		
+		if(speedMem->total % speedMem->div == 0)
+		{
+			speedMem->lData[speedMem->total / speedMem->div] = getLeftSpeed();
+			speedMem->rData[speedMem->total / speedMem->div] = getRightSpeed();
+		}
+		speedMem->total ++;
+	}
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -142,6 +175,31 @@ double getRightSpeed()
 					6.6e-2 * 3.1415926 * 
 					reloadFre / (360 * 2);
 }
+
+void MemOut()
+{
+	char message[50];
+	snprintf(message, sizeof(message), "lData addr: 0x%08lX\r\n", (unsigned long)(uintptr_t)(speedMem->lData));
+    HAL_UART_Transmit(speedMem->huart, (uint8_t *)message, strlen(message), 1000);
+
+    // ?? rData ??
+    snprintf(message, sizeof(message), "rData addr: 0x%08lX\r\n", (unsigned long)(uintptr_t)(speedMem->rData));
+    HAL_UART_Transmit(speedMem->huart, (uint8_t *)message, strlen(message), 1000);
+	for(int i = 0; i < speedMem->total / speedMem->div; i ++)
+	{
+		sprintf(message, "%lf\t", speedMem->lData[i]);
+		HAL_UART_Transmit(speedMem->huart, (uint8_t *)message, strlen(message), 1000);
+	}
+	for(int i = 0; i < speedMem->total / speedMem->div; i ++)
+	{
+		sprintf(message, "%lf\t", speedMem->rData[i]);
+		HAL_UART_Transmit(speedMem->huart, (uint8_t *)message, strlen(message), 1000);
+	}
+}
+
+void destoryMem()
+{}
+	
 uint32_t ReloadTime(TIM_TypeDef* tim)
 {
 	uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
