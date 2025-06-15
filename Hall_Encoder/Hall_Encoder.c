@@ -1,32 +1,29 @@
-
-
 #include "Hall_Encoder.h"
 
-int leftSpeed, rightSpeed;// Variables to get the increment from encoders, not real speed
-uint32_t reloadFre;
-TIM_HandleTypeDef *leftT; //Timer you set for left encoder
-TIM_HandleTypeDef *rightT; //Timer you set for right encoder
-TIM_HandleTypeDef *reload_tim; //Timer you set as real-time clock
+EncoderSpeed encoders[MAXENCODERNUM]; // Array to store encoder data
+int numEncoders = 0; // Number of encoders initialized
+
 extern Mem *speedMem;
 
-void EncoderInit(TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
-	TIM_HandleTypeDef *rightTimer, uint32_t chan1R, uint32_t chan2R,
-	TIM_HandleTypeDef *realTimer)
+void EncoderInit(TIM_HandleTypeDef *Timer, uint32_t chan1, uint32_t chan2, TIM_HandleTypeDef *realTimer)
 	//set global variables for encoders
 {
-	leftT = leftTimer;
-	rightT = rightTimer;
-	reload_tim = realTimer;
+	if (numEncoders >= MAXENCODERNUM)
+	{
+		return; // Maximum number of encoders reached
+	}
+
+	encoders[numEncoders].timer = Timer;
+	encoders[numEncoders].realTimer = realTimer;
 	
-	HAL_TIM_PWM_Start(leftTimer,chan1L);//?
-  HAL_TIM_PWM_Start(leftTimer,chan2L);//?
-  HAL_TIM_PWM_Start(rightTimer,chan1R);//?
-  HAL_TIM_PWM_Start(rightTimer,chan2R);//?
+	HAL_TIM_PWM_Start(Timer,chan1);//?
+	HAL_TIM_PWM_Start(Timer,chan2);//?
+		
+	__HAL_TIM_CLEAR_FLAG(realTimer,TIM_FLAG_UPDATE);
+	HAL_TIM_Base_Start_IT(realTimer);
 	
-  __HAL_TIM_CLEAR_FLAG(realTimer,TIM_FLAG_UPDATE);
-  HAL_TIM_Base_Start_IT(realTimer);
-	
-	reloadFre = ReloadTime(realTimer->Instance);
+	encoders[numEncoders].reloadFre = ReloadTime(realTimer->Instance);
+	numEncoders++;
 	return;
 }
 
@@ -38,53 +35,40 @@ int getTIMx_DetaCnt(TIM_HandleTypeDef *htim)
     return cnt;
 }
 
-void Get_Motor_Speed(int *leftSpeed, int *rightSpeed)
-{
-	*leftSpeed = getTIMx_DetaCnt(leftT);
-	*rightSpeed = getTIMx_DetaCnt(rightT);
-
-	if(speedMem != NULL)
+void UpdateSpeed(int i, TIM_HandleTypeDef *reload_tim)
+	//get the speed of the motor
+	//E is the encoder speed struct, reload_tim is the timer used to measure real time
+{	
+	if (encoders[i].timer == NULL || encoders[i].realTimer == NULL)
 	{
-		if(speedMem->total >= speedMem->size * speedMem->div)
-		{
-			return;
-		}
-		
-		if(speedMem->total % speedMem->div == 0)
-		{
-			speedMem->lData[speedMem->total / speedMem->div] = getLeftSpeed();
-			speedMem->rData[speedMem->total / speedMem->div] = getRightSpeed();
-		}
-		speedMem->total ++;
+		return; // Timer not initialized
+	}
+	if(reload_tim == encoders[i].realTimer)
+	{
+		encoders[i].speed = getTIMx_DetaCnt(encoders[i].timer);
 	}
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void UpdateAllSpeed(TIM_HandleTypeDef *reload_tim)
+	//update all encoders' speed
 {
-    if (htim == reload_tim)
-    {
-        Get_Motor_Speed(&leftSpeed, &rightSpeed);
-    }
+	for (int i = 0; i < numEncoders; i++)
+	{
+		UpdateSpeed(i, reload_tim);
+	}
 }
 
 //Get wheels' speed with the unit of m/s
 //'+' means forwards and '-' means backwards.
 //When you are using the code, please connect PE9 to E1A, PE11 to E1B, 
-double getLeftSpeed()
+double getSpeed(int index)
 {
-	
-	return leftSpeed * 
-					6.6e-2 * 3.1415926 * 
-					reloadFre / (360 * 2);
+	return encoders[index].speed * 
+		WHEEL_CIRCUMFERENCE * 
+		encoders[index].reloadFre / (PPR * 2);
 		//4.394215799e-3; 
 		// Left number is computed by (length of the circle) * (frequence of the clock / (leftSpeed add number for every single circle
 		// which is (6.6e-2 * pi * (240e6 / ((65535 + 1) * (239 + 1)) / (360 * 2))
-}
-double getRightSpeed()
-{
-	return rightSpeed * 
-					6.6e-2 * 3.1415926 * 
-					reloadFre / (360 * 2);
 }
 
 uint32_t ReloadTime(TIM_TypeDef* tim)

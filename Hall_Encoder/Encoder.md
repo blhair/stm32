@@ -1,94 +1,89 @@
-# Hall_Encoder 库说明
+# Hall_Encoder 编码器测速模块
 
-本库用于基于 STM32 的霍尔编码器测速，适用于双轮差速小车等场景。通过定时器和编码器接口，实时获取左右轮速度，并支持速度数据存储。
-
----
-
-## 主要函数用法
-
-### 1. EncoderInit
-
-```c
-void EncoderInit(
-    TIM_HandleTypeDef *leftTimer, uint32_t chan1L, uint32_t chan2L,
-    TIM_HandleTypeDef *rightTimer, uint32_t chan1R, uint32_t chan2R,
-    TIM_HandleTypeDef *realTimer
-);
-```
-
-**功能说明：**  
-初始化编码器相关的定时器和通道，设置全局变量，启动 PWM 和定时中断。
-
-**参数说明：**
-- `leftTimer`：左轮编码器用的定时器句柄指针
-- `chan1L`、`chan2L`：左轮编码器的两个通道编号（如 `TIM_CHANNEL_1`、`TIM_CHANNEL_2`）
-- `rightTimer`：右轮编码器用的定时器句柄指针
-- `chan1R`、`chan2R`：右轮编码器的两个通道编号
-- `realTimer`：用于定时采样速度的定时器句柄指针
-
-**使用示例：**
-```c
-EncoderInit(&htim1, TIM_CHANNEL_1, TIM_CHANNEL_2, &htim2, TIM_CHANNEL_1, TIM_CHANNEL_2, &htim3);
-```
+本模块为 STM32 平台下的霍尔编码器测速库，适用于双轮差速小车等场景。通过定时器和编码器接口，实时获取轮速，支持多编码器管理，并可灵活集成到实际项目中。
 
 ---
 
-### 2. getLeftSpeed
+## 功能简介
 
-```c
-double getLeftSpeed(void);
-```
-
-**功能说明：**  
-获取左轮当前速度，单位为 m/s。返回值为正表示前进，负表示后退。
-
-**使用示例：**
-```c
-double left_speed = getLeftSpeed();
-printf("左轮速度: %f m/s\n", left_speed);
-```
+- 支持多路编码器测速（最多 10 路）
+- 通过定时器中断自动更新速度
+- 速度单位为 m/s，正负号区分前进/后退
+- 提供简单易用的初始化和查询接口
 
 ---
 
-### 3. getRightSpeed
+## 主要函数说明
 
+### 1. `void EncoderInit(TIM_HandleTypeDef *Timer, uint32_t chan1, uint32_t chan2, TIM_HandleTypeDef *realTimer);`
+
+**功能**：  
+初始化一个编码器测速通道，配置相关定时器和通道，并启动 PWM 及定时中断。
+
+**参数**：
+- `Timer`：编码器定时器句柄
+- `chan1`、`chan2`：编码器通道编号（如 `TIM_CHANNEL_1`、`TIM_CHANNEL_2`）
+- `realTimer`：用于测速的定时器句柄
+
+**使用示例**：
 ```c
-double getRightSpeed(void);
+EncoderInit(&htim2, TIM_CHANNEL_1, TIM_CHANNEL_2, &htim7);
+EncoderInit(&htim1, TIM_CHANNEL_1, TIM_CHANNEL_2, &htim7);
 ```
+> 上述代码分别初始化了两个编码器，测速定时器均为 TIM7。
+> 如果你使用源代码，且板子型号为stm32h743vitx系列板子，可将PE11与右轮a口相连，PE9与右轮b口相连，PA0与左轮a口相连，PA1与b口相连，可正好实现前进后退方向正确的测试
 
-**功能说明：**  
-获取右轮当前速度，单位为 m/s。返回值为正表示前进，负表示后退。
+---
 
-**使用示例：**
+### 2. `void UpdateAllSpeed(TIM_HandleTypeDef *reload_tim);`
+
+**功能**：  
+更新所有已初始化编码器的速度。通常在定时器溢出中断中调用，实现自动测速。
+
+**典型用法**（放在定时器中断回调函数中）：
 ```c
-double right_speed = getRightSpeed();
-printf("右轮速度: %f m/s\n", right_speed);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    UpdateAllSpeed(htim);
+}
+```
+> 推荐将测速定时器（如 TIM7）的中断服务函数中调用 `UpdateAllSpeed`，实现定时自动测速。
+
+---
+
+### 3. `double getSpeed(int index);`
+
+**功能**：  
+获取指定编码器的当前速度，单位为 m/s。`index` 为初始化顺序（0 表示第一个编码器）。
+
+**示例**：
+```c
+double left_speed = getSpeed(0);
+double right_speed = getSpeed(1);
 ```
 
 ---
 
 ## 其他函数简介
 
-- `int getTIMx_DetaCnt(TIM_HandleTypeDef *htim)`  
-  获取定时器自上次调用后的计数变化量，并重置计数器。用于计算编码器增量。
+- `int getTIMx_DetaCnt(TIM_HandleTypeDef *htim);`  
+  获取编码器定时器自上次调用后的计数变化量，并重置计数器。
 
-- `void Get_Motor_Speed(int *leftSpeed, int *rightSpeed)`  
-  读取左右轮编码器的增量，并可将速度数据存入外部定义的 `speedMem` 缓存。
+- `void UpdateSpeed(int i, TIM_HandleTypeDef *reload_tim);`  
+  更新指定编码器的速度（一般无需手动调用，由 `UpdateAllSpeed` 管理）。
 
-- `void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)`  
-  定时器溢出中断回调，自动调用 `Get_Motor_Speed` 实现定时采样。
-
-- `uint32_t ReloadTime(TIM_TypeDef* tim)`  
+- `uint32_t ReloadTime(TIM_TypeDef* tim);`  
   计算定时器的实际溢出频率，用于速度换算。
 
 ---
 
 ## 注意事项
 
-- 使用前需正确配置定时器和编码器接口，并确保 `main.h`、`tim.h`、`Mem.h` 等头文件可用。
-- 速度采样依赖于定时器中断，请确保 `HAL_TIM_Base_Start_IT` 已启动。
-- `speedMem` 结构体需用户自行实现和初始化（用于速度数据记录）。
+- 使用前需确保相关定时器、GPIO 已在 CubeMX 或手动初始化完成。
+- 支持多编码器，初始化顺序决定 `getSpeed(index)` 的索引。
+- 推荐将 `UpdateAllSpeed` 放在测速定时器的中断回调中，保证测速实时性。
+- 速度计算依赖定时器参数和编码器参数，需根据实际硬件配置调整宏定义。
 
 ---
 
-如有疑问或需进一步扩展，请参考源码注释或联系开发者。
+如需详细了解更多接口和用法，请参考源码注释或联系作者。
