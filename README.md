@@ -24,4 +24,21 @@
 ---
 
 各模块的详细用法和接口说明请参见对应目录下的文档。
-ps:我真是服了github copilot的文笔，废了
+
+---
+
+## 📘 Git 使用与 CubeMX 项目管理实践指南
+
+本项目推荐使用 Git 进行版本控制与多人协作。  
+如需了解 STM32CubeMX 项目与 Git 协作的详细教程、冲突处理、.ioc 文件管理等内容，请参考：[git_usage/git_learning.md](./git_usage/git_learning.md)。
+
+该文档包含：
+- Git 基础与高阶命令用法
+- CubeMX 工程与 .ioc 文件协作注意事项
+- .gitignore 示例与团队协作建议
+- 推荐学习资源与常用命令速查
+- 以及一些git学习参考书籍
+
+---
+
+如有建议或问题，欢迎联系作者交流。
