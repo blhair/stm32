@@ -3,6 +3,21 @@
 本库用于基于 STM32 的 TB6612FNG 电机驱动芯片控制，支持电机正转、反转、刹车、滑行等多种工作模式，并可通过 PWM 占空比调节速度。
 
 ---
+## STM32CubeMX (IOC) 配置说明
+
+在使用 TB6612FNG 电机驱动库前，需通过 STM32CubeMX 工具（生成 `.ioc` 工程文件）完成相关外设的初始化配置。主要包括：
+
+- 配置用于电机控制的 GPIO 引脚为输出模式（如 IN1、IN2）。
+- 配置一个定时器的 PWM 通道，用于调节电机速度。
+- 确保时钟、引脚复用等设置与实际硬件连接一致。
+
+**配置示例：**
+
+假设使用 STM32F103C8T6，电机 A 的 IN1、IN2 分别连接到 PA1、PA2，PWM 信号输出到 TIM1_CH1（PA8）：
+
+1. 在 CubeMX 的“Pinout & Configuration”界面，将 PA1、PA2 设置为 GPIO_Output，PA8 设置为 TIM1_CH1。
+2. 在“Configuration”中，设置 TIM1 为 PWM Generation Channel 1，Prescaler 和 Period 根据需要调整（如 Period 设为 1000）。
+3. 生成代码后，即可在 `main.c` 中调用本库函数进行电机控制。
 
 ## 主要函数用法
 
